@@ -452,3 +452,48 @@ main.results { display: flex; flex-direction: column; gap: 20px; }
   .big-initials { font-size: 72px; }
   .footle-bar, .na-bar { flex-wrap: wrap; }
 }
+
+/* ================================================================ auction draft */
+.auction { max-width: 1250px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: 1fr 420px; gap: 20px; align-items: start; }
+.lot { display: flex; gap: 28px; align-items: center; justify-content: center; flex-wrap: wrap; padding-top: 10px; }
+.lot-card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.lot-fit { font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 99px; background: #4a1623; color: #ffb3c0; }
+.lot-fit.ok { background: #134b36; color: var(--acc2); }
+.bid-panel { flex: 1; min-width: 280px; max-width: 440px; display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center; }
+.cur-bid { display: flex; flex-direction: column; align-items: center; }
+.cur-bid b { font-family: 'Bebas Neue'; font-size: 96px; line-height: .9; color: var(--acc); }
+.bid-now { font-family: 'Bebas Neue'; font-size: 30px; color: var(--acc2); }
+.bid-wait { color: var(--muted); font-size: 17px; }
+.bid-wait b { color: var(--text); }
+.stepper { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.bid-amount { font-family: 'Bebas Neue'; font-size: 54px; min-width: 90px; color: var(--acc); line-height: 1; }
+.bid-btns { display: flex; gap: 10px; }
+.bid-log { display: flex; flex-direction: column-reverse; gap: 4px; font-size: 13px; color: var(--muted); max-height: 140px; overflow: auto; }
+.bid-log .pass { opacity: .6; font-style: italic; }
+.stamp { font-family: 'Bebas Neue'; font-size: 84px; line-height: 1; transform: rotate(-8deg); border: 6px solid; padding: 0 18px; border-radius: 12px; animation: pop .45s cubic-bezier(.2, 1.6, .5, 1); }
+.stamp.won { color: var(--acc2); } .stamp.lost { color: var(--bad); } .stamp.unsold { color: var(--muted); }
+.sold-to { font-size: 18px; }
+.sold-to b { color: var(--acc); }
+.reveal-bids { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.reveal-bids span { background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; animation: rise .4s both; }
+.reveal-bids span.win { border-color: var(--acc2); color: var(--acc2); }
+.a-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.a-team { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+.a-team.me { border-color: var(--acc); }
+.a-team-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.a-team-head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.a-money { font-family: 'Bebas Neue'; font-size: 30px; color: var(--acc); }
+.pitch.five { aspect-ratio: 4 / 5; margin-top: 8px; }
+.pitch.five .fc-card { --w: 50px; }
+.pitch.five .fc-name { font-size: 8px; }
+.auction-res { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 380px)); gap: 16px; justify-content: center; }
+.a-final.winner { border-color: var(--gold); box-shadow: 0 0 0 3px #f5c54233; }
+.a-final.me .a-final-head b { color: var(--acc); }
+.a-final-head { display: flex; gap: 10px; align-items: center; font-family: 'Bebas Neue'; font-size: 30px; }
+.a-final-rating { display: flex; align-items: baseline; gap: 8px; }
+.a-final-rating b { font-family: 'Bebas Neue'; font-size: 64px; line-height: 1; color: var(--acc); }
+.a-final-rating span { color: var(--muted); text-transform: uppercase; font-size: 12px; letter-spacing: 1px; }
+@media (max-width: 900px) {
+  .auction { grid-template-columns: 1fr; }
+  .cur-bid b { font-size: 70px; }
+}

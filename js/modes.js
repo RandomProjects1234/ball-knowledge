@@ -1,9 +1,9 @@
 // Pure game logic: question generators, the $20 draft and the grid. Runs on the
 // host only; results are sent to everyone as plain JSON.
-import { PLAYERS, ACTIVE_PLAYERS, P, POS_NAME, NATIONS } from './data.js?v=mui1d0pu';
-import { PHOTOS } from './photos.js?v=mui1d0pu';
-import { TRIVIA } from './trivia.js?v=mui1d0pu';
-import { pick, shuffle, sample, rand, poisson, weighted, clamp } from './util.js?v=mui1d0pu';
+import { PLAYERS, ACTIVE_PLAYERS, P, POS_NAME, NATIONS } from './data.js?v=mui1zywn';
+import { PHOTOS } from './photos.js?v=mui1zywn';
+import { TRIVIA } from './trivia.js?v=mui1zywn';
+import { pick, shuffle, sample, rand, poisson, weighted, clamp } from './util.js?v=mui1zywn';
 
 export const CATEGORIES = [
   ['featured', '⭐ Big games'],
@@ -15,10 +15,11 @@ export const CATEGORIES = [
 ];
 
 export const MODES = {
-  draft: { cat: 'featured', name: '$20 Draft', icon: '💵', blurb: 'Build an XI on a $20 budget, then battle it out in a mini league.', special: true },
+  draft: { cat: 'featured', name: '$20 Draft', icon: '💵', blurb: 'Players go under the hammer. Outbid your rival for a 5-a-side team (GK, CB, CM, ST, ST). Best rated team wins.', special: true },
   footle: { cat: 'featured', name: 'Footle', icon: '🟩', blurb: 'Wordle for footballers. Guess the mystery player from colour-coded hints.', special: true },
   grid: { cat: 'featured', name: 'Football Grid', icon: '#️⃣', blurb: 'Fill a 3×3 grid: a player who fits both the row and the column.', special: true },
   nameall: { cat: 'featured', name: 'Name Them All', icon: '📝', blurb: 'One club or country, 75 seconds. Name as many players as you can.', special: true },
+  budgetxi: { cat: 'featured', name: 'Budget XI', icon: '📋', blurb: 'Pick a full XI from priced cards on a budget, then play a mini league.', special: true },
   mixed: { cat: 'featured', name: 'Ball Knowledge Gauntlet', icon: '🔥', blurb: 'A random mix of every quiz. The true test.' },
   photo: { cat: 'photos', name: 'Guess the Player', icon: '📸', blurb: 'A blurry photo slowly sharpens. Name him before everyone else.' },
   zoom: { cat: 'photos', name: 'Zoomed In', icon: '🔍', blurb: 'Starts as an extreme close-up and slowly zooms out.' },

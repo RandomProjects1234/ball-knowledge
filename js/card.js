@@ -1,6 +1,6 @@
-import { NATIONS, P, shortName } from './data.js?v=mui1d0pu';
-import { PHOTOS } from './photos.js?v=mui1d0pu';
-import { esc } from './util.js?v=mui1d0pu';
+import { NATIONS, P, shortName } from './data.js?v=mui1zywn';
+import { PHOTOS } from './photos.js?v=mui1zywn';
+import { esc } from './util.js?v=mui1zywn';
 
 const SILHOUETTE = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120"><circle cx="50" cy="42" r="22" fill="#0006"/><path d="M8 120c4-30 22-44 42-44s38 14 42 44z" fill="#0006"/></svg>`);

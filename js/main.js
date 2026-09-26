@@ -1,9 +1,10 @@
-import { Hub } from './net.js?v=mui1d0pu';
-import { Host } from './game.js?v=mui1d0pu';
-import { MODES, CATEGORIES, DRAFT_SLOTS, canAfford, teamStats, fits, answersFor, gridPoints, setIcons, pool, footleHints } from './modes.js?v=mui1d0pu';
-import { PLAYERS, P, NATIONS, shortName } from './data.js?v=mui1d0pu';
-import { cardHTML, photoOf, flagImg, flagUrl } from './card.js?v=mui1d0pu';
-import { esc, norm, sfx, toggleMute, isMuted, shuffle } from './util.js?v=mui1d0pu';
+import { Hub } from './net.js?v=mui1zywn';
+import { Host } from './game.js?v=mui1zywn';
+import { MODES, CATEGORIES, DRAFT_SLOTS, canAfford, teamStats, fits, answersFor, gridPoints, setIcons, pool, footleHints } from './modes.js?v=mui1zywn';
+import { PLAYERS, P, NATIONS, shortName } from './data.js?v=mui1zywn';
+import { FIVE_SLOTS, slotFor, maxBid, isFull, teamRating } from './auction.js?v=mui1zywn';
+import { cardHTML, photoOf, flagImg, flagUrl } from './card.js?v=mui1zywn';
+import { esc, norm, sfx, toggleMute, isMuted, shuffle } from './util.js?v=mui1zywn';
 
 const app = document.getElementById('app');
 const S = {
@@ -148,6 +149,9 @@ function renderLobby() {
   let settingsHtml = '';
   const iconsRow = `<div class="set"><span>Icons</span>${opt('icons', [true, false], (v) => (v ? 'On' : 'Off'))}</div>`;
   if (st.mode === 'draft') {
+    settingsHtml = `<div class="set"><span>Bidding</span>${opt('bidStyle', ['turns', 'secret'], (v) => (v === 'turns' ? 'Take turns' : 'Secret bids'))}</div>
+      <div class="set"><span>Budget</span>${opt('budget', [15, 20, 30], (v) => '$' + v)}</div>`;
+  } else if (st.mode === 'budgetxi') {
     settingsHtml = `<div class="set"><span>Budget</span>${opt('budget', [15, 20, 25, 30], (v) => '$' + v)}</div>
 `;
   } else if (st.mode === 'grid') {
@@ -425,7 +429,7 @@ function renderDraft(m) {
   const slot = DRAFT_SLOTS[m.slot];
   const avg = my.pids.length ? Math.round(my.pids.reduce((s, id) => s + P(id).rating, 0) / my.pids.length) : '–';
   app.innerHTML = `
-  ${topbar(`<span class="qcount">💵 $${S.settings.budget || 20} Draft · pick ${m.slot + 1}/11</span>`)}
+  ${topbar(`<span class="qcount">📋 Budget XI ($${S.settings.budget || 20}) · pick ${m.slot + 1}/11</span>`)}
   <main class="draft">
     <div class="timer"><div class="bar" id="tbar"></div></div>
     <section class="draft-main">
@@ -792,6 +796,146 @@ function nameAllResultsHTML(m) {
   </section>`;
 }
 
+// ================================================================= $20 AUCTION DRAFT
+function fivePitchHTML(team, highlightSlot) {
+  return `<div class="pitch five">
+    <div class="pitch-lines"><i class="half"></i><i class="circle"></i><i class="box top"></i><i class="box bot"></i></div>
+    ${FIVE_SLOTS.map((s) => {
+      const pid = team.slots[s.key];
+      const inner = pid ? cardHTML(pid, { size: 'xs', price: team.paid[s.key] })
+        : `<div class="slot-empty ${s.key === highlightSlot ? 'current' : ''}">${s.label}</div>`;
+      return `<div class="slot" style="left:${s.x}%;top:${s.y}%">${inner}</div>`;
+    }).join('')}
+  </div>`;
+}
+
+function aTeamsHTML(teams, pid) {
+  return teams.map((t) => {
+    const slot = pid ? slotFor(t, pid) : null;
+    const r = teamRating(t);
+    return `<div class="a-team ${t.id === me() ? 'me' : ''}">
+      <div class="a-team-head"><b>${t.human ? '' : '🤖 '}${esc(t.name)}</b><span class="a-money">$${t.budget}</span></div>
+      <div class="muted small">${isFull(t) ? 'Team complete' : `max bid $${maxBid(t)}`} · AVG ${r.avg || '–'}</div>
+      ${fivePitchHTML(t, slot)}
+    </div>`;
+  }).join('');
+}
+
+function renderLot(m) {
+  clearTimers();
+  const fresh = S.lot?.lot?.n !== m.lot.n || S.screen !== 'auction';
+  S.screen = 'auction';
+  S.lot = m;
+  S.answered = new Set();
+  const { lot, teams, style } = m;
+  const my = teams.find((t) => t.id === me());
+  const canUse = lot.bidders.includes(me());
+  const mySlot = slotFor(my, lot.pid);
+  const nameOf = (id) => teams.find((t) => t.id === id)?.name || '?';
+  let panel;
+  if (style === 'secret') {
+    panel = canUse
+      ? `<div class="bid-now">🤫 Secret bid — everyone bids at once</div>
+         ${bidStepperHTML(0, maxBid(my), Math.min(1, maxBid(my)))}
+         <div class="bid-btns"><button class="btn primary big" data-act="bid-lock">Lock in bid</button></div>
+         <p class="muted small">Bid $0 to pass. Highest bid wins, ties are a coin flip.</p>`
+      : `<div class="bid-wait">${mySlot ? 'You can\'t afford a bid right now.' : 'No room in your team for him — sit this one out.'}</div>`;
+  } else {
+    const myTurn = lot.turn === me();
+    const minBid = lot.high + 1;
+    const log = lot.log.map((l) => `<span class="${l.pass ? 'pass' : ''}">${esc(nameOf(l.id))} ${l.pass ? 'passed' : `bid $${l.amount}`}</span>`).join('');
+    panel = `
+      <div class="cur-bid"><span class="muted small">Current bid</span><b>$${lot.high}</b><span>${lot.by ? `by ${esc(nameOf(lot.by))}` : 'No bids yet'}</span></div>
+      ${myTurn && minBid <= maxBid(my)
+        ? `<div class="bid-now">👉 Your turn: raise or pass</div>${bidStepperHTML(minBid, maxBid(my), minBid)}
+           <div class="bid-btns"><button class="btn primary big" data-act="bid-raise">Bid</button><button class="btn big" data-act="bid-pass">Pass</button></div>`
+        : myTurn
+          ? `<div class="bid-now">You can't beat $${lot.high} (max bid $${maxBid(my)})</div><div class="bid-btns"><button class="btn big" data-act="bid-pass">Pass</button></div>`
+          : `<div class="bid-wait">${canUse ? '' : (mySlot ? 'You can\'t afford him. ' : 'No room in your team for him. ')}Waiting for <b>${esc(nameOf(lot.turn))}</b>…</div>`}
+      <div class="bid-log">${log}</div>`;
+  }
+  app.innerHTML = `
+  ${topbar(`<span class="qcount">💵 $${S.settings.budget || 20} Draft · lot ${lot.n}</span>`)}
+  <main class="auction">
+    <div class="timer"><div class="bar" id="tbar"></div></div>
+    <section class="lot">
+      <div class="lot-card">${cardHTML(lot.pid, { size: 'lg', extraClass: fresh ? 'flip-in' : '' })}
+        <div class="lot-fit ${mySlot ? 'ok' : ''}">${mySlot ? `Fits your ${FIVE_SLOTS.find((s) => s.key === mySlot).label}` : 'No room in your team'}</div></div>
+      <div class="bid-panel" id="bidpanel">${panel}</div>
+    </section>
+    <aside class="a-teams">${aTeamsHTML(teams, lot.pid)}</aside>
+  </main>`;
+  if (lot.turn === me() || (style === 'secret' && canUse)) sfx.tick();
+  runTimer(m.dur, () => {}, 0.3);
+}
+
+function bidStepperHTML(min, max, val) {
+  return `<div class="stepper" data-min="${min}" data-max="${max}">
+    <button class="btn" data-act="bid-step" data-d="-1">−</button>
+    <div class="bid-amount">$<span id="bidval">${val}</span></div>
+    <button class="btn" data-act="bid-step" data-d="1">+1</button>
+    <button class="btn" data-act="bid-step" data-d="2">+2</button>
+    <button class="btn" data-act="bid-step" data-d="5">+5</button>
+    <button class="btn small ghost" data-act="bid-step" data-d="max">Max</button>
+  </div>`;
+}
+
+function onBidStep(d) {
+  const st = app.querySelector('.stepper');
+  const v = app.querySelector('#bidval');
+  const min = +st.dataset.min, max = +st.dataset.max;
+  v.textContent = d === 'max' ? max : clampNum(+v.textContent + +d, min, max);
+  sfx.click();
+}
+const clampNum = (x, a, b) => Math.max(a, Math.min(b, x));
+
+function sendBid(kind) {
+  if (S.screen !== 'auction' || S.lot?.sent) return;
+  const amount = +(app.querySelector('#bidval')?.textContent || 0);
+  S.lot.sent = true;
+  if (kind === 'pass') S.hub.toHost({ t: 'bid', lot: S.lot.lot.n, pass: true });
+  else S.hub.toHost({ t: 'bid', lot: S.lot.lot.n, amount });
+  sfx.pack();
+  const panel = app.querySelector('#bidpanel');
+  if (kind === 'lock') panel.innerHTML = `<div class="bid-now">🔒 Locked in $${amount}</div><p class="muted">Waiting for the other bids…</p>`;
+  else panel.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+}
+
+function onSold(m) {
+  clearTimers();
+  if (S.screen !== 'auction') return;
+  const { lot, teams, to, amount } = m;
+  const nameOf = (id) => teams.find((t) => t.id === id)?.name || '?';
+  if (to === me()) sfx.goal(); else if (to) sfx.bad(); else sfx.whistle();
+  const bids = lot.bids ? `<div class="reveal-bids">${Object.entries(lot.bids).sort((a, b) => b[1] - a[1])
+    .map(([id, b]) => `<span class="${id === to ? 'win' : ''}">${esc(nameOf(id))}: <b>$${b}</b></span>`).join('')}</div>` : '';
+  app.querySelector('#bidpanel').innerHTML = `
+    <div class="stamp ${to ? (to === me() ? 'won' : 'lost') : 'unsold'}">${to ? 'SOLD!' : 'UNSOLD'}</div>
+    <div class="sold-to">${to ? `${esc(P(lot.pid).name)} → <b>${esc(nameOf(to))}</b> for <b>$${amount}</b>${lot.coinFlip ? ' (won the coin flip 🪙)' : ''}` : 'Nobody bid. Next player…'}</div>
+    ${bids}`;
+  app.querySelector('.a-teams').innerHTML = aTeamsHTML(teams, null);
+  const bar = app.querySelector('#tbar');
+  if (bar) bar.style.transform = 'scaleX(0)';
+}
+
+function auctionResultsHTML(m) {
+  const { teams, ranking } = m.auction;
+  const winner = ranking[0].id;
+  const tie = ranking[1] && ranking[0].total === ranking[1].total;
+  return `<section class="auction-res">
+    ${ranking.map((r, i) => {
+      const t = teams.find((x) => x.id === r.id);
+      const spent = Object.values(t.paid).reduce((a, b) => a + b, 0);
+      return `<div class="panel a-final ${r.id === winner ? 'winner' : ''} ${t.id === me() ? 'me' : ''}">
+        <div class="a-final-head"><span>${r.id === winner ? '👑' : ordinal(i + 1)}</span><b>${esc(t.name)}</b></div>
+        <div class="a-final-rating"><b>${r.avg}</b><span>team rating</span></div>
+        <div class="muted small">spent $${spent} · ${Object.values(t.slots).map((id) => P(id).rating).join(' + ')} = ${r.total}${tie && i < 2 ? ` · tiebreak: best player ${r.best}` : ''}</div>
+        ${fivePitchHTML(t, null)}
+      </div>`;
+    }).join('')}
+  </section>`;
+}
+
 // ================================================================= RESULTS
 function renderResults(m) {
   clearTimers();
@@ -804,14 +948,16 @@ function renderResults(m) {
   if (m.league) extra = draftResultsHTML(m);
   if (m.grid) extra = gridResultsHTML(m);
   if (m.nameall) extra = nameAllResultsHTML(m);
+  if (m.auction) extra = auctionResultsHTML(m);
   if (myPos === 0) sfx.goal(); else sfx.whistle();
   app.innerHTML = `
   ${topbar(`<span class="qcount">${MODES[m.mode].icon} ${esc(MODES[m.mode].name)} · Full time</span>`)}
   <main class="results">
     <section class="podium">
+      ${m.auction ? `<p class="verdict">${m.auction.ranking[0].id === me() ? '🏆 Your 5-a-side has the best rating. You win the draft!' : `${esc(m.auction.teams.find((t) => t.id === m.auction.ranking[0].id).name)} built the better team.`}</p>` : ''}
       ${m.league ? `<p class="verdict">Your XI finished <b>${ordinal(m.league.standings.findIndex((r) => r.id === me()) + 1)}</b> in the league${m.league.standings[0].id === me() ? ' — CHAMPIONS! 🏆' : ''}</p>` : ''}
       <h2>${st.length > 1 ? (myPos === 0 ? '🏆 You win!' : `You finished ${myPos + 1}${['st', 'nd', 'rd'][myPos] || 'th'}`) : `Final score: ${st[0].score}`}</h2>
-      ${st.length === 1 && !m.league && !m.grid && !m.nameall && m.mode !== 'footle' ? `<p class="verdict">${verdict(st[0].score, m.mode)}</p>` : ''}
+      ${st.length === 1 && !m.league && !m.grid && !m.nameall && !m.auction && m.mode !== 'footle' ? `<p class="verdict">${verdict(st[0].score, m.mode)}</p>` : ''}
       <ol class="standings">${st.map((p, i) => `<li class="${p.id === me() ? 'me' : ''}"><span>${medal[i] || i + 1}</span><span>${esc(p.name)}</span><b>${p.score}</b><em>total ${p.total}</em></li>`).join('')}</ol>
       <div class="res-btns">
         ${isHost() ? '<button class="btn primary big" data-act="again">↻ Play again</button><button class="btn big" data-act="to-lobby">Choose another game</button>'
@@ -908,6 +1054,8 @@ function onMsg(m) {
       break;
     case 'reveal': if (S.screen === 'quiz') renderReveal(m); break;
     case 'draft': renderDraft(m); break;
+    case 'lot': renderLot(m); break;
+    case 'sold': onSold(m); break;
     case 'picked':
       S.answered = new Set(m.ids);
       app.querySelectorAll('.rival').forEach((r) => { r.querySelector('.tick').textContent = S.answered.has(r.dataset.tid) ? '✓' : ''; });
@@ -939,7 +1087,7 @@ app.addEventListener('click', (e) => {
   if (seg && isHost()) {
     const key = seg.parentElement.dataset.key;
     let val = seg.dataset.val;
-    val = val === 'true' ? true : val === 'false' ? false : +val;
+    val = val === 'true' ? true : val === 'false' ? false : isNaN(+val) ? val : +val;
     sfx.click();
     return S.hub.toHost({ t: 'settings', settings: { [key]: val } });
   }
@@ -965,6 +1113,10 @@ app.addEventListener('click', (e) => {
       return;
     }
     case 'grid-done': return finishGrid();
+    case 'bid-step': return onBidStep(e.target.closest('[data-d]').dataset.d);
+    case 'bid-raise': return sendBid('raise');
+    case 'bid-lock': return sendBid('lock');
+    case 'bid-pass': return sendBid('pass');
     case 'nameall-done': return finishNameAll();
     case 'footle-giveup': return footleSubmit(false);
   }
