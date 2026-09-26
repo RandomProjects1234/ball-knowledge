@@ -35,7 +35,7 @@ export function cardHTML(pOrId, opts = {}) {
     <div class="fc-top">
       <div class="fc-rating${opts.hideRating ? ' hidden-val' : ''}">${rating}</div>
       <div class="fc-pos">${p.pos}</div>
-      ${flagImg(p.nation, 'fc-flag')}
+      ${opts.hideFlag ? '<div class="fc-flag mystery-flag">?</div>' : flagImg(p.nation, 'fc-flag')}
     </div>
     <div class="fc-photo${opts.blur ? ' blurred' : ''}"><img src="${photoOf(p)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.src='${SILHOUETTE}'"></div>
     <div class="fc-name">${esc(name)}</div>

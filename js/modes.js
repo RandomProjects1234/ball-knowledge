@@ -5,16 +5,41 @@ import { PHOTOS } from './photos.js';
 import { TRIVIA } from './trivia.js';
 import { pick, shuffle, sample, rand, poisson, weighted, clamp } from './util.js';
 
+export const CATEGORIES = [
+  ['featured', '⭐ Big games'],
+  ['photos', '📸 Photo rounds'],
+  ['clubs', '🏟️ Careers & clubs'],
+  ['players', '🕵️ Guess the player'],
+  ['numbers', '📊 Ratings & numbers'],
+  ['trivia', '🧠 Trivia'],
+];
+
 export const MODES = {
-  draft: { name: '$20 Draft', icon: '💵', blurb: 'Build an XI on a $20 budget, then battle it out in a mini league.', special: true },
-  photo: { name: 'Guess the Player', icon: '📸', blurb: 'A blurry photo slowly sharpens. Name him before everyone else.' },
-  career: { name: 'Career Path', icon: '🧭', blurb: 'Club history only. Whose career is this?' },
-  whoami: { name: 'Who Am I?', icon: '🕵️', blurb: 'Clues drop one by one. Faster answer = more points.' },
-  hl: { name: 'Higher or Lower', icon: '📈', blurb: 'Is his FC rating higher or lower? Who is older?' },
-  rate: { name: 'Rate the Card', icon: '🎴', blurb: 'Guess the FC 26 rating. Closest wins.' },
-  trivia: { name: 'Trivia Blitz', icon: '🧠', blurb: 'World Cups, Ballon d\'Ors, records, derbies, transfers.' },
-  grid: { name: 'Football Grid', icon: '#️⃣', blurb: 'Fill a 3×3 grid: a player who fits both the row and the column.', special: true },
-  mixed: { name: 'Ball Knowledge Gauntlet', icon: '🔥', blurb: 'A random mix of every quiz. The true test.' },
+  draft: { cat: 'featured', name: '$20 Draft', icon: '💵', blurb: 'Build an XI on a $20 budget, then battle it out in a mini league.', special: true },
+  footle: { cat: 'featured', name: 'Footle', icon: '🟩', blurb: 'Wordle for footballers. Guess the mystery player from colour-coded hints.', special: true },
+  grid: { cat: 'featured', name: 'Football Grid', icon: '#️⃣', blurb: 'Fill a 3×3 grid: a player who fits both the row and the column.', special: true },
+  nameall: { cat: 'featured', name: 'Name Them All', icon: '📝', blurb: 'One club or country, 75 seconds. Name as many players as you can.', special: true },
+  mixed: { cat: 'featured', name: 'Ball Knowledge Gauntlet', icon: '🔥', blurb: 'A random mix of every quiz. The true test.' },
+  photo: { cat: 'photos', name: 'Guess the Player', icon: '📸', blurb: 'A blurry photo slowly sharpens. Name him before everyone else.' },
+  zoom: { cat: 'photos', name: 'Zoomed In', icon: '🔍', blurb: 'Starts as an extreme close-up and slowly zooms out.' },
+  pixel: { cat: 'photos', name: 'Pixel Player', icon: '👾', blurb: 'A retro 8-bit photo that gets less blocky every second.' },
+  career: { cat: 'clubs', name: 'Career Path', icon: '🧭', blurb: 'Club history only. Whose career is this?' },
+  gap: { cat: 'clubs', name: 'Fill the Gap', icon: '🧩', blurb: 'One club is missing from the career path. Which one?' },
+  connection: { cat: 'clubs', name: 'Club Connection', icon: '🔗', blurb: 'Two players, one shared club. Find the link.' },
+  squad: { cat: 'clubs', name: 'Name the Club', icon: '🏟️', blurb: 'Three players who all played for the same club. Which club?' },
+  oddone: { cat: 'clubs', name: 'Odd One Out', icon: '🙃', blurb: 'Three of them share a club. Spot the one who does not belong.' },
+  whoami: { cat: 'players', name: 'Who Am I?', icon: '🕵️', blurb: 'Clues drop one by one. Faster answer = more points.' },
+  initials: { cat: 'players', name: 'Mystery Initials', icon: '🔠', blurb: 'Initials, flag, position and club. Who is it?' },
+  scramble: { cat: 'players', name: 'Name Scramble', icon: '🔀', blurb: 'Unscramble the surname before the clock runs out.' },
+  nation3: { cat: 'players', name: 'Name the Nation', icon: '🌍', blurb: 'Three players from one national team. Which country?' },
+  hl: { cat: 'numbers', name: 'Higher or Lower', icon: '📈', blurb: 'Is his FC rating higher or lower? Who is older?' },
+  rate: { cat: 'numbers', name: 'Rate the Card', icon: '🎴', blurb: 'Guess the FC 26 rating. Closest wins.' },
+  highest: { cat: 'numbers', name: 'Top Rated', icon: '👑', blurb: 'Four cards, ratings hidden. Who is the highest rated?' },
+  youngest: { cat: 'numbers', name: 'Baby Face', icon: '🍼', blurb: 'Four players. Who is the youngest?' },
+  born: { cat: 'numbers', name: 'Birth Year', icon: '🎂', blurb: 'Guess the year he was born. Closest wins.' },
+  trivia: { cat: 'trivia', name: 'Trivia Blitz', icon: '🧠', blurb: "World Cups, Ballon d'Ors, records, derbies, transfers." },
+  tf: { cat: 'trivia', name: 'True or False', icon: '✅', blurb: 'Rapid-fire football facts. Real or cap?' },
+  flags: { cat: 'trivia', name: 'Flag Frenzy', icon: '🏳️', blurb: 'Name the football nation from its flag.' },
 };
 
 // ---------------------------------------------------------------- helpers
@@ -88,7 +113,7 @@ const GEN = {
     const p = pick(ACTIVE_PLAYERS.filter((x) => !used.has(x.id)));
     used.add(p.id);
     return { mode: 'rate', kind: 'number', prompt: `What is ${p.name}'s FC 26 rating?`, media: { type: 'card', pid: p.id },
-      min: 70, max: 95, answer: p.rating, reveal: { pid: p.id } };
+      min: 70, max: 95, start: 82, label: 'FC rating', answer: p.rating, reveal: { pid: p.id } };
   },
   trivia(used) {
     if (Math.random() < 0.72) {
@@ -107,7 +132,194 @@ const GEN = {
     return mcq('trivia', `Which of these clubs has ${p.name} played for?`, { type: 'text', tag: 'Clubs', pid: p.id },
       pick(p.clubs), big, { pid: p.id });
   },
+  zoom(used) {
+    const p = pick(withPhoto().filter((x) => !used.has(x.id)));
+    used.add(p.id);
+    const wrong = lookalikes(p, 3, (x) => !!PHOTOS[x.id]).map((x) => x.name);
+    return mcq('zoom', 'Who is this?', { type: 'zoom', src: PHOTOS[p.id], fx: 38 + rand(24), fy: 14 + rand(20) }, p.name, wrong, { pid: p.id });
+  },
+  pixel(used) {
+    const p = pick(withPhoto().filter((x) => !used.has(x.id)));
+    used.add(p.id);
+    const wrong = lookalikes(p, 3, (x) => !!PHOTOS[x.id]).map((x) => x.name);
+    return mcq('pixel', 'Who is this?', { type: 'pixel', src: PHOTOS[p.id] }, p.name, wrong, { pid: p.id });
+  },
+  gap(used) {
+    const p = pick(pool().filter((x) => x.clubs.length >= 4 && !used.has(x.id)));
+    used.add(p.id);
+    const path = dedupeRuns(p.career);
+    const hideIdx = 1 + rand(path.length - 1);
+    const missing = path[hideIdx];
+    const wrong = sample(BIG_CLUBS.filter((c) => !p.clubs.includes(c)), 3);
+    return mcq('gap', `${p.name}'s career has a gap. Which club is missing?`,
+      { type: 'career', clubs: path.map((c, i) => (i === hideIdx ? '???' : c)) }, missing, wrong, { pid: p.id });
+  },
+  connection() {
+    for (let t = 0; t < 600; t++) {
+      const [a, b] = sample(pool(), 2);
+      const shared = a.clubs.filter((c) => b.clubs.includes(c));
+      if (shared.length !== 1) continue;
+      const wrong = sample(BIG_CLUBS.filter((c) => !(a.clubs.includes(c) && b.clubs.includes(c))), 3);
+      return mcq('connection', `Which club have both ${a.name} and ${b.name} played for?`,
+        { type: 'cards', pids: [a.id, b.id], hideClub: true }, shared[0], wrong, { text: shared[0] });
+    }
+    return GEN.career(new Set());
+  },
+  squad() {
+    for (let t = 0; t < 600; t++) {
+      const club = pick(BIG_CLUBS);
+      const members = pool().filter((p) => p.clubs.includes(club));
+      if (members.length < 3) continue;
+      const three = sample(members, 3);
+      const common = three[0].clubs.filter((c) => three.every((p) => p.clubs.includes(c)));
+      if (common.length !== 1) continue;
+      const wrong = sample(BIG_CLUBS.filter((c) => c !== club), 3);
+      return mcq('squad', 'All three have played for which club?', { type: 'cards', pids: three.map((p) => p.id), hideClub: true },
+        club, wrong, { text: club });
+    }
+    return GEN.career(new Set());
+  },
+  oddone() {
+    for (let t = 0; t < 600; t++) {
+      const club = pick(BIG_CLUBS);
+      const members = pool().filter((p) => p.clubs.includes(club));
+      if (members.length < 3) continue;
+      const three = sample(members, 3);
+      const odd = lookalikes(three[0], 1, (x) => !x.clubs.includes(club))[0];
+      if (!odd) continue;
+      // No other trio (including the odd one) may share a club, or the answer is ambiguous.
+      const ambiguous = [[0, 1], [0, 2], [1, 2]].some(([i, j]) =>
+        odd.clubs.some((c) => three[i].clubs.includes(c) && three[j].clubs.includes(c)));
+      if (ambiguous) continue;
+      const four = shuffle([...three, odd]);
+      return { mode: 'oddone', kind: 'mcq', prompt: 'Three of these played for the same club. Who is the odd one out?',
+        media: { type: 'cards', pids: four.map((p) => p.id), hideClub: true }, options: four.map((p) => p.name),
+        answer: four.indexOf(odd), reveal: { text: `The other three all played for ${club}` } };
+    }
+    return GEN.career(new Set());
+  },
+  initials(used) {
+    const p = pick(pool().filter((x) => x.name.includes(' ') && !used.has(x.id)));
+    used.add(p.id);
+    const initials = p.name.split(/[\s-]+/).map((w) => w[0].toUpperCase() + '.').join(' ');
+    let wrong = lookalikes(p, 3, (x) => x.nation === p.nation);
+    if (wrong.length < 3) wrong = [...wrong, ...lookalikes(p, 3 - wrong.length, (x) => !wrong.includes(x))];
+    return mcq('initials', 'Who has these initials?',
+      { type: 'initials', initials, nation: p.nation, pos: POS_NAME[p.pos], club: p.icon ? `${p.club} (last club)` : p.club },
+      p.name, wrong.map((x) => x.name), { pid: p.id });
+  },
+  scramble(used) {
+    const p = pick(pool().filter((x) => x.name.split(' ').pop().length >= 5 && !used.has(x.id)));
+    used.add(p.id);
+    const sur = p.name.split(' ').pop().toUpperCase();
+    let letters;
+    do { letters = shuffle([...sur]).join(''); } while (letters === sur);
+    const wrong = lookalikes(p, 3).map((x) => x.name);
+    return mcq('scramble', 'Unscramble the surname!', { type: 'scramble', letters }, p.name, wrong, { pid: p.id });
+  },
+  nation3() {
+    const nations = Object.keys(NATIONS).filter((n) => pool().filter((p) => p.nation === n).length >= 3);
+    const n = pick(nations);
+    const three = sample(pool().filter((p) => p.nation === n), 3);
+    const wrong = sample(Object.keys(NATIONS).filter((x) => x !== n), 3);
+    return mcq('nation3', 'All three represent which country?', { type: 'cards', pids: three.map((p) => p.id), hideFlag: true }, n, wrong, { text: n });
+  },
+  highest() {
+    let four;
+    do { four = sample(ACTIVE_PLAYERS, 4); } while (four.filter((p) => p.rating === Math.max(...four.map((x) => x.rating))).length > 1);
+    const best = four.reduce((a, b) => (a.rating > b.rating ? a : b));
+    return { mode: 'highest', kind: 'mcq', prompt: 'Who has the highest FC rating?', media: { type: 'cards', pids: four.map((p) => p.id), hideRating: true },
+      options: four.map((p) => p.name), answer: four.indexOf(best),
+      reveal: { text: four.map((p) => `${p.name.split(' ').pop()} ${p.rating}`).join(' · ') } };
+  },
+  youngest() {
+    let four;
+    do { four = sample(pool(), 4); } while (four.filter((p) => p.born === Math.max(...four.map((x) => x.born))).length > 1);
+    const baby = four.reduce((a, b) => (a.born > b.born ? a : b));
+    return { mode: 'youngest', kind: 'mcq', prompt: 'Who is the youngest?', media: { type: 'cards', pids: four.map((p) => p.id) },
+      options: four.map((p) => p.name), answer: four.indexOf(baby),
+      reveal: { text: four.map((p) => `${p.name.split(' ').pop()} ${p.born}`).join(' · ') } };
+  },
+  born(used) {
+    const p = pick(pool().filter((x) => !used.has(x.id)));
+    used.add(p.id);
+    return { mode: 'born', kind: 'number', prompt: `What year was ${p.name} born?`, media: { type: 'card', pid: p.id, showRating: true },
+      min: p.icon ? 1925 : 1983, max: p.icon ? 1995 : 2008, start: p.icon ? 1970 : 1998, label: 'Born', answer: p.born, reveal: { pid: p.id } };
+  },
+  tf(used) {
+    const truth = Math.random() < 0.5;
+    const r = Math.random();
+    let text;
+    if (r < 0.3) {
+      const t = pick(TRIVIA.filter((x) => !used.has(x[1])));
+      used.add(t[1]);
+      text = `${t[1]} → ${truth ? t[2] : pick(t.slice(3))}`;
+    } else {
+      const p = pick(pool().filter((x) => x.clubs.length >= 2));
+      if (r < 0.6) {
+        const club = truth ? pick(p.clubs) : pick(BIG_CLUBS.filter((c) => !p.clubs.includes(c)));
+        text = `${p.name} has played for ${club}.`;
+      } else if (r < 0.75) {
+        const nat = truth ? p.nation : pick(Object.keys(NATIONS).filter((n) => n !== p.nation));
+        text = `${p.name} represents ${nat}.`;
+      } else if (r < 0.88) {
+        const y = truth ? p.born : p.born + pick([-3, -2, -1, 1, 2, 3]);
+        text = `${p.name} was born in ${y}.`;
+      } else {
+        const pos = truth ? p.pos : pick(Object.keys(POS_NAME).filter((x) => POS_NAME[x] !== POS_NAME[p.pos]));
+        text = `${p.name} is a ${POS_NAME[pos].toLowerCase()}.`;
+      }
+    }
+    return { mode: 'tf', kind: 'mcq', prompt: text, media: { type: 'text', tag: 'True or false?' }, options: ['True ✅', 'False ❌'],
+      answer: truth ? 0 : 1, reveal: { text: truth ? 'TRUE' : 'FALSE' } };
+  },
+  flags(used) {
+    const n = pick(Object.keys(FLAGS).filter((x) => !used.has(x)));
+    used.add(n);
+    const wrong = sample(Object.keys(FLAGS).filter((x) => x !== n), 3);
+    return mcq('flags', 'Which football nation is this?', { type: 'flag', iso: FLAGS[n] }, n, wrong, { text: n });
+  },
 };
+
+// Flag Frenzy: player nations plus other World Cup / continental regulars.
+export const FLAGS = {
+  ...NATIONS,
+  'Mexico': 'mx', 'Costa Rica': 'cr', 'Panama': 'pa', 'Jamaica': 'jm', 'Chile': 'cl', 'Peru': 'pe', 'Paraguay': 'py',
+  'Venezuela': 've', 'Bolivia': 'bo', 'Australia': 'au', 'New Zealand': 'nz', 'Saudi Arabia': 'sa', 'Iran': 'ir',
+  'Qatar': 'qa', 'Iraq': 'iq', 'Tunisia': 'tn', 'South Africa': 'za', 'Mali': 'ml', 'Burkina Faso': 'bf',
+  'Austria': 'at', 'Finland': 'fi', 'Iceland': 'is', 'Romania': 'ro', 'Slovakia': 'sk', 'Albania': 'al',
+  'Greece': 'gr', 'Bosnia and Herzegovina': 'ba', 'North Macedonia': 'mk', 'Northern Ireland': 'gb-nir',
+  'Uzbekistan': 'uz', 'Jordan': 'jo', 'Cape Verde': 'cv', 'Haiti': 'ht', 'Curaçao': 'cw', 'Honduras': 'hn',
+};
+
+// ---------------------------------------------------------------- Footle & Name Them All
+export function footlePick() {
+  const cands = pool().filter((p) => p.rating >= 82 || p.icon);
+  return pick(cands).id;
+}
+
+// Per-column hint for a Footle guess vs the mystery player: 'hit' | 'near' | 'miss' (+ arrow for numbers).
+export function footleHints(guess, target) {
+  const g = P(guess), t = P(target);
+  const num = (a, b, near) => ({ v: a, st: a === b ? 'hit' : Math.abs(a - b) <= near ? 'near' : 'miss', dir: a === b ? '' : a < b ? '↑' : '↓' });
+  return {
+    nation: { v: g.nation, st: g.nation === t.nation ? 'hit' : 'miss' },
+    pos: { v: g.pos, st: g.pos === t.pos ? 'hit' : g.group === t.group ? 'near' : 'miss' },
+    club: { v: g.icon ? 'Icon' : g.club, st: !g.icon && !t.icon && g.club === t.club ? 'hit' : t.clubs.includes(g.club) ? 'near' : 'miss' },
+    born: num(g.born, t.born, 2),
+    rating: num(g.rating, t.rating, 2),
+  };
+}
+
+export function nameAllCriterion() {
+  const counts = {};
+  for (const p of pool()) {
+    p.clubs.forEach((c) => { counts['club|' + c] = (counts['club|' + c] || 0) + 1; });
+    counts['nation|' + p.nation] = (counts['nation|' + p.nation] || 0) + 1;
+  }
+  const [type, v] = pick(Object.keys(counts).filter((k) => counts[k] >= 10)).split('|');
+  return { type, v, total: counts[type + '|' + v] };
+}
 
 const clubCount = {};
 PLAYERS.forEach((p) => p.clubs.forEach((c) => { clubCount[c] = (clubCount[c] || 0) + 1; }));
@@ -116,7 +328,8 @@ const BIG_CLUBS = Object.keys(clubCount).filter((c) => clubCount[c] >= 6);
 export function makeQuestions(mode, n) {
   const used = new Set();
   const qs = [];
-  const mixKinds = ['photo', 'career', 'whoami', 'hl', 'trivia', 'rate', 'photo', 'trivia'];
+  const mixKinds = shuffle(['photo', 'career', 'whoami', 'hl', 'trivia', 'rate', 'zoom', 'gap', 'connection', 'squad',
+    'oddone', 'initials', 'scramble', 'nation3', 'highest', 'youngest', 'born', 'tf', 'flags', 'pixel']);
   for (let i = 0; i < n; i++) {
     const kind = mode === 'mixed' ? mixKinds[i % mixKinds.length] : mode;
     qs.push(GEN[kind](used));

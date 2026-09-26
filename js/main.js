@@ -1,6 +1,6 @@
 import { Hub } from './net.js';
 import { Host } from './game.js';
-import { MODES, DRAFT_SLOTS, canAfford, teamStats, fits, answersFor, gridPoints, setIcons, pool } from './modes.js';
+import { MODES, CATEGORIES, DRAFT_SLOTS, canAfford, teamStats, fits, answersFor, gridPoints, setIcons, pool, footleHints } from './modes.js';
 import { PLAYERS, P, NATIONS, shortName } from './data.js';
 import { cardHTML, photoOf, flagImg, flagUrl } from './card.js';
 import { esc, norm, sfx, toggleMute, isMuted, shuffle } from './util.js';
@@ -152,6 +152,10 @@ function renderLobby() {
 `;
   } else if (st.mode === 'grid') {
     settingsHtml = `<div class="set"><span>Time</span>${opt('gridTime', [120, 180, 300], (v) => v / 60 + ' min')}</div>`;
+  } else if (st.mode === 'footle') {
+    settingsHtml = `<div class="set"><span>Rounds</span>${opt('footleRounds', [1, 3, 5])}</div>`;
+  } else if (st.mode === 'nameall') {
+    settingsHtml = `<div class="set"><span>Time</span>${opt('nameTime', [45, 75, 120], (v) => v + 's')}</div>`;
   } else {
     settingsHtml = `<div class="set"><span>Questions</span>${opt('rounds', [5, 10, 15, 20])}</div>
       <div class="set"><span>Seconds</span>${opt('time', [10, 15, 20])}</div>`;
@@ -161,15 +165,17 @@ function renderLobby() {
   ${topbar()}
   <main class="lobby">
     <section class="modes">
-      <h2>${host ? 'Pick a game' : 'Host is picking a game…'}</h2>
+      <h2>${host ? 'Pick a game' : 'Host is picking a game…'} <span class="muted count">${Object.keys(MODES).length} modes</span></h2>
+      ${CATEGORIES.map(([cat, label]) => `
+      <h3 class="cat-h">${label}</h3>
       <div class="mode-grid">
-        ${Object.entries(MODES).map(([k, m]) => `
-          <button class="mode-card ${st.mode === k ? 'sel' : ''}" data-mode="${k}" ${host ? '' : 'disabled'}>
+        ${Object.entries(MODES).filter(([, m]) => m.cat === cat).map(([k, m]) => `
+          <button class="mode-card ${st.mode === k ? 'sel' : ''} ${cat === 'featured' ? 'feat' : ''}" data-mode="${k}" ${host ? '' : 'disabled'}>
             <div class="mc-icon">${m.icon}</div>
             <div class="mc-name">${esc(m.name)}</div>
             <div class="mc-blurb">${esc(m.blurb)}</div>
           </button>`).join('')}
-      </div>
+      </div>`).join('')}
     </section>
     <aside class="side">
       ${S.code ? `<div class="panel code-panel">
@@ -179,7 +185,7 @@ function renderLobby() {
       </div>` : ''}
       <div class="panel">
         <div class="lbl">${esc(mode.icon + ' ' + mode.name)}</div>
-        <div class="settings">${settingsHtml}${st.mode === 'trivia' ? '' : iconsRow}</div>
+        <div class="settings">${settingsHtml}${['trivia', 'flags'].includes(st.mode) ? '' : iconsRow}</div>
         ${host ? `<button class="btn big primary wide" data-act="start">▶ Start${S.players.length > 1 ? ` (${S.players.length} players)` : ''}</button>`
           : '<p class="muted">Waiting for the host to start…</p>'}
       </div>
@@ -213,14 +219,14 @@ function scoreboard(showDelta) {
 
 function mediaHTML(q, revealed) {
   const m = q.media;
-  if (revealed && q.reveal?.pid && m.type !== 'hl' && m.type !== 'card') {
+  if (revealed && q.reveal?.pid && !['hl', 'card', 'cards'].includes(m.type)) {
     return `<div class="media reveal-card">${cardHTML(q.reveal.pid, { size: 'lg', extraClass: 'flip-in' })}</div>`;
   }
   switch (m.type) {
     case 'photo':
       return `<div class="media"><div class="photo-frame"><img id="blurimg" src="${esc(m.src)}" referrerpolicy="no-referrer" alt=""></div></div>`;
     case 'career':
-      return `<div class="media career">${m.clubs.map((c, i) => `<div class="club-chip" style="--d:${i * 0.12}s">${esc(c)}</div>${i < m.clubs.length - 1 ? '<span class="arrow">➜</span>' : ''}`).join('')}</div>`;
+      return `<div class="media career">${m.clubs.map((c, i) => `<div class="club-chip ${c === '???' ? 'mystery' : ''}" style="--d:${i * 0.12}s">${esc(c)}</div>${i < m.clubs.length - 1 ? '<span class="arrow">➜</span>' : ''}`).join('')}</div>`;
     case 'clues':
       return `<div class="media clues">${m.clues.map((c, i) => `<div class="clue ${i === 0 ? 'show' : ''}" data-i="${i}"><span>${i + 1}</span><em>${i === 0 ? esc(c) : '🔒 Locked clue'}</em></div>`).join('')}</div>`;
     case 'hl':
@@ -228,7 +234,21 @@ function mediaHTML(q, revealed) {
     case 'vs':
       return `<div class="media duo">${cardHTML(m.a, { size: 'lg', hideRating: true })}<div class="vs">VS</div>${cardHTML(m.b, { size: 'lg', hideRating: true })}</div>`;
     case 'card':
-      return `<div class="media">${cardHTML(m.pid, { size: 'lg', hideRating: !revealed, extraClass: revealed ? 'pop' : '' })}</div>`;
+      return `<div class="media">${cardHTML(m.pid, { size: 'lg', hideRating: !revealed && !m.showRating, extraClass: revealed ? 'pop' : '' })}</div>`;
+    case 'cards':
+      return `<div class="media cards-row n${m.pids.length}">${m.pids.map((id) => cardHTML(id, { size: m.pids.length > 3 ? 'md' : 'lg',
+        hideRating: m.hideRating && !revealed, hideClub: m.hideClub && !revealed, hideFlag: m.hideFlag && !revealed })).join('')}</div>`;
+    case 'zoom':
+      return `<div class="media"><div class="photo-frame"><img id="zoomimg" src="${esc(m.src)}" referrerpolicy="no-referrer" alt="" style="transform-origin:${m.fx}% ${m.fy}%;transform:scale(6)"></div></div>`;
+    case 'pixel':
+      return `<div class="media"><div class="photo-frame"><canvas id="pixcanvas" width="250" height="300"></canvas></div></div>`;
+    case 'initials':
+      return `<div class="media initials"><div class="big-initials">${esc(m.initials)}</div>
+        <div class="init-clues">${flagImg(m.nation, 'init-flag')}<span>${esc(m.nation)}</span><span>${esc(m.pos)}</span><span>${esc(m.club)}</span></div></div>`;
+    case 'scramble':
+      return `<div class="media scramble">${[...m.letters].map((ch, i) => `<span class="tile" style="--d:${i * 0.05}s">${esc(ch)}</span>`).join('')}</div>`;
+    case 'flag':
+      return `<div class="media"><img class="big-flag" src="https://flagcdn.com/w320/${esc(m.iso)}.png" alt=""></div>`;
     default:
       return `<div class="media text-media"><span class="tag">${esc(m.tag || 'Trivia')}</span></div>`;
   }
@@ -237,8 +257,9 @@ function mediaHTML(q, revealed) {
 function answerHTML(q) {
   if (q.kind === 'number') {
     return `<div class="num-answer">
-      <div class="num-display" id="numval">82</div>
-      <input type="range" id="numslider" min="${q.min}" max="${q.max}" value="82">
+      <div class="num-label muted small">${esc(q.label || 'Your guess')}</div>
+      <div class="num-display" id="numval">${q.start ?? 82}</div>
+      <input type="range" id="numslider" min="${q.min}" max="${q.max}" value="${q.start ?? 82}">
       <div class="num-btns"><button class="btn" data-act="num-" >−</button><button class="btn primary big" data-act="lock">Lock in</button><button class="btn" data-act="num+">+</button></div>
     </div>`;
   }
@@ -295,10 +316,42 @@ function renderQuestion(m) {
       img.style.filter = 'blur(3px) grayscale(0)';
     }, 30));
   }
+  if (q.media.type === 'zoom') {
+    const img = app.querySelector('#zoomimg');
+    setTimeout(() => { img.style.transition = `transform ${m.dur}ms cubic-bezier(.5,0,.75,.4)`; img.style.transform = 'scale(1)'; }, 50);
+  }
+  if (q.media.type === 'pixel') startPixel(q.media.src, m.dur);
   if (q.kind === 'number') {
     const sl = app.querySelector('#numslider');
     sl.oninput = () => { app.querySelector('#numval').textContent = sl.value; };
   }
+}
+
+function startPixel(src, dur) {
+  const cv = app.querySelector('#pixcanvas');
+  const ctx = cv.getContext('2d');
+  const img = new Image();
+  img.referrerPolicy = 'no-referrer';
+  img.src = src;
+  const t0 = performance.now();
+  const small = document.createElement('canvas');
+  const sctx = small.getContext('2d');
+  const draw = () => {
+    if (!img.complete || !img.naturalWidth || !cv.isConnected) return;
+    const k = Math.min(1, (performance.now() - t0) / dur);
+    const block = Math.max(3, Math.round(34 * Math.pow(1 - k, 1.6)));
+    const w = Math.max(1, Math.ceil(cv.width / block)), h = Math.max(1, Math.ceil(cv.height / block));
+    small.width = w; small.height = h;
+    // cover-crop the photo, top-weighted like the cards
+    const r = Math.max(cv.width / img.naturalWidth, cv.height / img.naturalHeight);
+    const sw = cv.width / r, sh = cv.height / r;
+    const sx = (img.naturalWidth - sw) / 2, sy = (img.naturalHeight - sh) * 0.15;
+    sctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(small, 0, 0, w, h, 0, 0, cv.width, cv.height);
+  };
+  img.onload = draw;
+  every(120, draw);
 }
 
 function submitAnswer(a) {
@@ -328,7 +381,7 @@ function renderReveal(m) {
       const p = S.players.find((x) => x.id === id);
       return `<span class="guess ${r.ok ? 'ok' : ''}">${esc(p?.name || '?')}: <b>${r.a ?? '—'}</b></span>`;
     }).join('');
-    app.querySelector('#answers').innerHTML = `<div class="num-reveal">Actual rating: <b>${m.answer}</b><div class="guesses">${others}</div></div>`;
+    app.querySelector('#answers').innerHTML = `<div class="num-reveal">Actual ${esc((q.label || 'answer').toLowerCase())}: <b>${m.answer}</b><div class="guesses">${others}</div></div>`;
   } else {
     app.querySelectorAll('.opt').forEach((b, i) => {
       b.disabled = true;
@@ -344,7 +397,7 @@ function renderReveal(m) {
     if (mine.ok) { sfx.good(); fb.innerHTML = `<span class="ok">✓ +${mine.pts}</span>${mine.streak >= 3 ? ` <span class="streak">🔥 ${mine.streak} streak</span>` : ''}`; }
     else { sfx.bad(); fb.innerHTML = mine.a == null ? '<span class="no">⏰ Too slow!</span>' : `<span class="no">✗ ${mine.pts ? '+' + mine.pts : 'Wrong'}</span>`; }
   }
-  if (q.reveal?.text && q.mode === 'hl') fb.insertAdjacentHTML('beforeend', `<div class="reveal-text">${esc(q.reveal.text)}</div>`);
+  if (q.reveal?.text && !q.reveal.pid && q.kind === 'mcq' && !['trivia', 'flags', 'squad', 'connection', 'nation3'].includes(q.mode)) fb.insertAdjacentHTML('beforeend', `<div class="reveal-text">${esc(q.reveal.text)}</div>`);
   app.querySelector('#sb').innerHTML = scoreboard(true);
 }
 
@@ -533,6 +586,212 @@ function finishGrid() {
   app.querySelector('.grid-top').innerHTML = `<div>Submitted! ${S.players.length > 1 ? 'Waiting for others…' : ''}</div>`;
 }
 
+// ================================================================= SHARED PLAYER SEARCH
+function searchBoxHTML(placeholder) {
+  return `<div class="searchbox"><input id="sbq" placeholder="${esc(placeholder)}" autocomplete="off"><div class="drop" id="sbdrop"></div></div>`;
+}
+
+function bindSearch(isUsed) {
+  const input = app.querySelector('#sbq');
+  const drop = app.querySelector('#sbdrop');
+  S.searchUsed = isUsed;
+  input.oninput = () => {
+    const qn = norm(input.value);
+    if (qn.length < 2) { drop.innerHTML = ''; return; }
+    const words = qn.split(' ');
+    const hits = pool().filter((p) => { const n = norm(p.name); return words.every((w) => n.includes(w)); })
+      .sort((a, b) => norm(a.name).indexOf(words[0]) - norm(b.name).indexOf(words[0])).slice(0, 7);
+    drop.innerHTML = hits.map((p) => `<button class="res ${isUsed(p.id) ? 'used' : ''}" data-hit="${p.id}" ${isUsed(p.id) ? 'disabled' : ''}>
+      <img src="${photoOf(p)}" referrerpolicy="no-referrer" alt=""><span>${esc(p.name)}</span>${p.icon ? '<em>ICON</em>' : ''}</button>`).join('')
+      || '<div class="muted small pad">No players found in the database.</div>';
+  };
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') { const first = drop.querySelector('[data-hit]:not([disabled])'); if (first) onSearchPick(first.dataset.hit); }
+  };
+  setTimeout(() => input.focus(), 30);
+}
+
+function onSearchPick(pid) {
+  const input = app.querySelector('#sbq');
+  if (input) { input.value = ''; app.querySelector('#sbdrop').innerHTML = ''; input.focus(); }
+  if (S.screen === 'footle') footleGuess(pid);
+  else if (S.screen === 'nameall') nameAllGuess(pid);
+}
+
+function runTimer(dur, onEnd, lowAt = 0.2) {
+  const t0 = performance.now();
+  const bar = app.querySelector('#tbar');
+  every(200, () => {
+    const l = Math.max(0, 1 - (performance.now() - t0) / dur);
+    bar.style.transform = `scaleX(${l})`;
+    bar.classList.toggle('low', l < lowAt);
+    if (l <= 0) onEnd();
+  });
+}
+
+// ================================================================= FOOTLE
+const FOOT_COLS = [['nation', 'Nation'], ['pos', 'Pos'], ['club', 'Club'], ['born', 'Born'], ['rating', 'OVR']];
+
+function renderFootle(m) {
+  clearTimers();
+  S.screen = 'footle';
+  S.players = m.players;
+  S.answered = new Set();
+  const target = decodeURIComponent(escape(atob(m.secret.split('').reverse().join(''))));
+  S.footle = { target, round: m.round, max: m.guesses, tries: [], done: false, t0: performance.now(), dur: m.dur };
+  app.innerHTML = `
+  ${topbar(`<span class="qcount">🟩 Footle · round ${m.round + 1}/${m.rounds}</span>`)}
+  <main class="footle">
+    <div class="timer"><div class="bar" id="tbar"></div></div>
+    <section class="footle-main">
+      <div class="footle-top">
+        <h2>Guess the mystery player</h2>
+        <div class="muted small">🟩 match · 🟨 close (same position group, a former club, or within 2) · ↑↓ higher/lower</div>
+      </div>
+      <div class="footle-bar">${searchBoxHTML('Type a player name…')}
+        <span class="guess-count">Guess <b id="fcount">1</b>/${m.guesses}</span>
+        <button class="btn small ghost" data-act="footle-giveup">Give up</button></div>
+      <div class="footle-table">
+        <div class="ft-row ft-head"><div>Player</div>${FOOT_COLS.map(([, l]) => `<div>${l}</div>`).join('')}</div>
+        <div id="ftrows"></div>
+      </div>
+      <div class="feedback" id="feedback"></div>
+    </section>
+    <div id="sb">${scoreboard(false)}</div>
+  </main>`;
+  bindSearch((pid) => S.footle.tries.includes(pid));
+  runTimer(m.dur, () => footleSubmit(false));
+}
+
+function footleGuess(pid) {
+  const f = S.footle;
+  if (!f || f.done || f.tries.includes(pid)) return;
+  f.tries.push(pid);
+  const h = footleHints(pid, f.target);
+  const p = P(pid);
+  const cell = (k) => {
+    const x = h[k];
+    const v = k === 'nation' ? `${flagImg(x.v, 'ft-flag')}<span>${esc(x.v)}</span>` : `<span>${esc(x.v)}${x.dir ? ` <b>${x.dir}</b>` : ''}</span>`;
+    return `<div class="ft-cell ${x.st}">${v}</div>`;
+  };
+  app.querySelector('#ftrows').insertAdjacentHTML('afterbegin', `<div class="ft-row flip-row">
+    <div class="ft-player"><img src="${photoOf(p)}" referrerpolicy="no-referrer" alt=""><span>${esc(p.name)}</span></div>
+    ${FOOT_COLS.map(([k]) => cell(k)).join('')}</div>`);
+  const solved = pid === f.target;
+  if (solved) { sfx.goal(); footleSubmit(true); return; }
+  sfx.click();
+  if (f.tries.length >= f.max) return footleSubmit(false);
+  app.querySelector('#fcount').textContent = f.tries.length + 1;
+}
+
+function footleSubmit(solved) {
+  const f = S.footle;
+  if (!f || f.done) return;
+  f.done = true;
+  clearTimers();
+  S.hub.toHost({ t: 'footle-done', round: f.round, solved, tries: solved ? f.tries.length : f.max, ms: Math.round(performance.now() - f.t0) });
+  const bar = app.querySelector('.footle-bar');
+  if (bar) bar.innerHTML = solved
+    ? `<div class="solved">🎉 Got him in ${f.tries.length}! ${S.players.length > 1 ? 'Waiting for the others…' : ''}</div>`
+    : `<div class="muted">${S.players.length > 1 ? 'Out of guesses — waiting for the others…' : 'Out of guesses!'}</div>`;
+}
+
+function renderFootleReveal(m) {
+  clearTimers();
+  S.players = m.players;
+  const f = S.footle;
+  if (f && !f.done) { f.done = true; }
+  const mine = m.results[me()];
+  if (mine && !mine.solved) sfx.bad();
+  const rows = Object.entries(m.results).map(([id, r]) => {
+    const pl = S.players.find((x) => x.id === id);
+    return `<div class="fr-row ${id === me() ? 'me' : ''}"><span>${esc(pl?.name || '?')}</span><span>${r.solved ? `✅ ${r.tries} ${r.tries === 1 ? 'guess' : 'guesses'}` : '❌'}</span><b>+${r.pts}</b></div>`;
+  }).join('');
+  const main = app.querySelector('.footle-main');
+  if (!main) return;
+  main.innerHTML = `<div class="footle-reveal">
+    <div>${cardHTML(m.target, { size: 'lg', extraClass: 'flip-in' })}</div>
+    <div class="fr-side">
+      <h2>It was ${esc(P(m.target).name)}</h2>
+      <div class="fr-list">${rows}</div>
+      <p class="muted">${m.last ? 'Final results coming up…' : 'Next round in a few seconds…'}</p>
+    </div></div>`;
+  app.querySelector('#sb').innerHTML = scoreboard(false);
+}
+
+// ================================================================= NAME THEM ALL
+function critLabel(c) {
+  return c.type === 'nation' ? `players from ${c.v}` : `players who have played for ${c.v}`;
+}
+
+function renderNameAll(m) {
+  clearTimers();
+  S.screen = 'nameall';
+  S.players = m.players;
+  S.answered = new Set();
+  S.nameall = { crit: m.crit, found: [], done: false };
+  app.innerHTML = `
+  ${topbar(`<span class="qcount">📝 Name Them All</span>`)}
+  <main class="nameall">
+    <div class="timer"><div class="bar" id="tbar"></div></div>
+    <section class="na-main">
+      <div class="na-head">${critHTML(m.crit)}<div><h2>Name ${esc(critLabel(m.crit))}</h2>
+        <div class="muted small">There are <b>${m.crit.total}</b> in the database. No penalty for wrong guesses.</div></div>
+        <div class="na-count"><b id="nacount">0</b><span>found</span></div></div>
+      <div class="na-bar">${searchBoxHTML('Type a player…')}<button class="btn small" data-act="nameall-done">I'm done</button></div>
+      <div class="na-found" id="nafound"></div>
+    </section>
+    <div id="sb">${scoreboard(false)}</div>
+  </main>`;
+  bindSearch((pid) => S.nameall.found.includes(pid));
+  runTimer(m.dur, finishNameAll, 0.15);
+}
+
+function nameAllGuess(pid) {
+  const n = S.nameall;
+  if (!n || n.done || n.found.includes(pid)) return;
+  const p = P(pid);
+  if (!fits(p, n.crit)) {
+    sfx.bad();
+    toast(`✗ ${p.name} doesn't fit`, 1400);
+    const box = app.querySelector('.searchbox');
+    box.classList.add('shake');
+    setTimeout(() => box.classList.remove('shake'), 450);
+    return;
+  }
+  sfx.good();
+  n.found.push(pid);
+  app.querySelector('#nacount').textContent = n.found.length;
+  app.querySelector('#nafound').insertAdjacentHTML('afterbegin',
+    `<div class="na-chip pop"><img src="${photoOf(p)}" referrerpolicy="no-referrer" alt=""><span>${esc(p.name)}</span></div>`);
+}
+
+function finishNameAll() {
+  const n = S.nameall;
+  if (!n || n.done) return;
+  n.done = true;
+  clearTimers();
+  S.hub.toHost({ t: 'nameall-done', pids: n.found });
+  const bar = app.querySelector('.na-bar');
+  if (bar) bar.innerHTML = `<div class="muted">Submitted ${n.found.length}! ${S.players.length > 1 ? 'Waiting for the others…' : ''}</div>`;
+}
+
+function nameAllResultsHTML(m) {
+  const { crit, subs } = m.nameall;
+  const all = pool().filter((p) => fits(p, crit));
+  const named = new Set(Object.values(subs).flatMap((x) => x.valid));
+  const missed = all.filter((p) => !named.has(p.id)).sort((a, b) => b.rating - a.rating);
+  const mine = subs[me()] || { valid: [], unique: [] };
+  return `<section class="panel na-res">
+    <div class="lbl">${esc(critLabel(crit))} · you named ${mine.valid.length}/${all.length}</div>
+    <div class="na-found">${mine.valid.map((pid) => `<div class="na-chip"><img src="${photoOf(P(pid))}" referrerpolicy="no-referrer" alt=""><span>${esc(P(pid).name)}${mine.unique.includes(pid) ? ' ★' : ''}</span></div>`).join('') || '<span class="muted">Nobody. Oof.</span>'}</div>
+    ${S.players.length > 1 ? `<div class="lbl" style="margin-top:14px">Everyone</div><div class="scorers-list">${Object.entries(subs).map(([id, x]) =>
+      `<span>${esc(S.players.find((p) => p.id === id)?.name || '?')} <b>${x.valid.length}</b></span>`).join('')}</div>` : ''}
+    <div class="lbl" style="margin-top:14px">Nobody said (${missed.length})</div>
+    <div class="missed">${missed.map((p) => esc(p.name)).join(' · ') || 'You got them all! 🐐'}</div>
+  </section>`;
+}
+
 // ================================================================= RESULTS
 function renderResults(m) {
   clearTimers();
@@ -544,6 +803,7 @@ function renderResults(m) {
   let extra = '';
   if (m.league) extra = draftResultsHTML(m);
   if (m.grid) extra = gridResultsHTML(m);
+  if (m.nameall) extra = nameAllResultsHTML(m);
   if (myPos === 0) sfx.goal(); else sfx.whistle();
   app.innerHTML = `
   ${topbar(`<span class="qcount">${MODES[m.mode].icon} ${esc(MODES[m.mode].name)} · Full time</span>`)}
@@ -551,7 +811,7 @@ function renderResults(m) {
     <section class="podium">
       ${m.league ? `<p class="verdict">Your XI finished <b>${ordinal(m.league.standings.findIndex((r) => r.id === me()) + 1)}</b> in the league${m.league.standings[0].id === me() ? ' — CHAMPIONS! 🏆' : ''}</p>` : ''}
       <h2>${st.length > 1 ? (myPos === 0 ? '🏆 You win!' : `You finished ${myPos + 1}${['st', 'nd', 'rd'][myPos] || 'th'}`) : `Final score: ${st[0].score}`}</h2>
-      ${st.length === 1 && !m.league && !m.grid ? `<p class="verdict">${verdict(st[0].score, m.mode)}</p>` : ''}
+      ${st.length === 1 && !m.league && !m.grid && !m.nameall && m.mode !== 'footle' ? `<p class="verdict">${verdict(st[0].score, m.mode)}</p>` : ''}
       <ol class="standings">${st.map((p, i) => `<li class="${p.id === me() ? 'me' : ''}"><span>${medal[i] || i + 1}</span><span>${esc(p.name)}</span><b>${p.score}</b><em>total ${p.total}</em></li>`).join('')}</ol>
       <div class="res-btns">
         ${isHost() ? '<button class="btn primary big" data-act="again">↻ Play again</button><button class="btn big" data-act="to-lobby">Choose another game</button>'
@@ -644,7 +904,7 @@ function onMsg(m) {
     case 'q': renderQuestion(m); break;
     case 'progress':
       S.answered = new Set(m.answered);
-      if (S.screen === 'quiz' || S.screen === 'grid') app.querySelector('#sb').innerHTML = scoreboard(false);
+      if (['quiz', 'grid', 'footle', 'nameall'].includes(S.screen)) app.querySelector('#sb').innerHTML = scoreboard(false);
       break;
     case 'reveal': if (S.screen === 'quiz') renderReveal(m); break;
     case 'draft': renderDraft(m); break;
@@ -654,6 +914,9 @@ function onMsg(m) {
       break;
     case 'draft-slot-done': onDraftSlotDone(m); break;
     case 'grid': renderGrid(m); break;
+    case 'footle': renderFootle(m); break;
+    case 'footle-reveal': renderFootleReveal(m); break;
+    case 'nameall': renderNameAll(m); break;
     case 'end': renderResults(m); break;
   }
 }
@@ -670,6 +933,8 @@ app.addEventListener('click', (e) => {
   if (opt && !opt.disabled) return submitAnswer(+opt.dataset.opt);
   if (pickBtn && !pickBtn.disabled) return submitPick(pickBtn.dataset.pick);
   if (cell && S.screen === 'grid') return openGridSearch(cell.dataset.cell);
+  const hit = e.target.closest('[data-hit]');
+  if (hit && !hit.disabled) return onSearchPick(hit.dataset.hit);
   if (modeBtn && isHost()) { sfx.click(); return S.hub.toHost({ t: 'settings', settings: { mode: modeBtn.dataset.mode } }); }
   if (seg && isHost()) {
     const key = seg.parentElement.dataset.key;
@@ -700,6 +965,8 @@ app.addEventListener('click', (e) => {
       return;
     }
     case 'grid-done': return finishGrid();
+    case 'nameall-done': return finishNameAll();
+    case 'footle-giveup': return footleSubmit(false);
   }
 });
 

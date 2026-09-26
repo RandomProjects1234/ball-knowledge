@@ -1,17 +1,17 @@
 // Host-side controller. Owns the truth (players, scores, timers) and tells
 // every client what to show. In solo mode it simply has one player.
 import { MODES, makeQuestions, scoreAnswer, DRAFT_SLOTS, draftOptions, aiPick, canAfford,
-  runLeague, AI_TEAMS, makeGrid, fits, gridPoints, setIcons } from './modes.js';
+  runLeague, AI_TEAMS, makeGrid, fits, gridPoints, setIcons, footlePick, nameAllCriterion } from './modes.js';
 import { P } from './data.js';
 import { shuffle } from './util.js';
 
-const QUIZ_TIME = { photo: 1.0, career: 1.0, whoami: 1.4, hl: 0.8, rate: 1.0, trivia: 1.0, mixed: 1.0 };
+const QUIZ_TIME = { whoami: 1.4, hl: 0.8, tf: 0.7, flags: 0.7, scramble: 1.15, oddone: 1.2, squad: 1.1, gap: 1.1 };
 
 export class Host {
   constructor(hub, myName) {
     this.hub = hub;
     this.players = new Map();
-    this.settings = { mode: 'mixed', rounds: 10, time: 15, budget: 20, icons: true, gridTime: 180 };
+    this.settings = { mode: 'mixed', rounds: 10, time: 15, budget: 20, icons: true, gridTime: 180, footleRounds: 3, nameTime: 75 };
     this.phase = 'lobby';
     this.addPlayer(hub.myId, myName);
     hub.onHostMsg = (id, m) => this.handle(id, m);
@@ -49,6 +49,8 @@ export class Host {
     if (m.t === 'ans') this.onAnswer(id, m);
     else if (m.t === 'pick') this.onPick(id, m);
     else if (m.t === 'grid-done') this.onGridDone(id, m);
+    else if (m.t === 'footle-done') this.onFootleDone(id, m);
+    else if (m.t === 'nameall-done') this.onNameAllDone(id, m);
     else if (id === this.hub.myId) {
       // host-only commands
       if (m.t === 'settings') { Object.assign(this.settings, m.settings); this.pushLobby(); }
@@ -70,6 +72,8 @@ export class Host {
     this.hub.broadcast({ t: 'start', mode, players: this.roster() });
     if (mode === 'draft') this.startDraft();
     else if (mode === 'grid') this.startGrid();
+    else if (mode === 'footle') this.startFootle();
+    else if (mode === 'nameall') this.startNameAll();
     else this.startQuiz(mode);
   }
 
@@ -85,6 +89,8 @@ export class Host {
     if (this.phase === 'quiz' && this.q && this.humans.every((p) => this.answers[p.id])) this.endQuestion();
     if (this.phase === 'draft' && this.humans.every((p) => this.draftPicks[p.id])) this.endSlot();
     if (this.phase === 'grid' && this.humans.every((p) => this.gridSubs[p.id])) this.endGrid();
+    if (this.phase === 'footle' && this.humans.every((p) => this.footleSubs[p.id])) this.endFootleRound();
+    if (this.phase === 'nameall' && this.humans.every((p) => this.nameSubs[p.id])) this.endNameAll();
   }
 
   // ------------------------------------------------------------ quiz
@@ -234,6 +240,83 @@ export class Host {
       subs[p.id] = { cells, cellPts, total };
     }
     this.finish({ grid: g, subs });
+  }
+  // ------------------------------------------------------------ Footle
+  startFootle() {
+    this.footleRound = -1;
+    this.nextFootle();
+  }
+
+  nextFootle() {
+    this.footleRound++;
+    if (this.footleRound >= this.settings.footleRounds) return this.finish();
+    this.phase = 'footle';
+    this.target = footlePick();
+    this.footleSubs = {};
+    this.dur = 150000;
+    // Lightly obfuscated so the answer isn't sitting in plain sight in devtools.
+    const secret = btoa(unescape(encodeURIComponent(this.target))).split('').reverse().join('');
+    this.hub.broadcast({ t: 'footle', round: this.footleRound, rounds: this.settings.footleRounds, secret, guesses: 8, dur: this.dur, players: this.roster() });
+    this.timer = setTimeout(() => this.endFootleRound(), this.dur + 2500);
+  }
+
+  onFootleDone(id, m) {
+    if (this.phase !== 'footle' || m.round !== this.footleRound || this.footleSubs[id]) return;
+    this.footleSubs[id] = { solved: !!m.solved, tries: +m.tries || 8, ms: +m.ms || this.dur };
+    this.hub.broadcast({ t: 'progress', answered: Object.keys(this.footleSubs) });
+    this.checkAllIn();
+  }
+
+  endFootleRound() {
+    if (this.phase !== 'footle') return;
+    clearTimeout(this.timer);
+    this.phase = 'footle-reveal';
+    const results = {};
+    for (const p of this.humans) {
+      const sub = this.footleSubs[p.id] || { solved: false, tries: 8, ms: this.dur };
+      const pts = sub.solved ? 1000 + (8 - sub.tries) * 100 + Math.round(300 * Math.max(0, 1 - sub.ms / this.dur)) : 0;
+      p.score += pts;
+      results[p.id] = { ...sub, pts };
+    }
+    this.hub.broadcast({ t: 'footle-reveal', target: this.target, results, players: this.roster(),
+      last: this.footleRound + 1 >= this.settings.footleRounds });
+    this.timer = setTimeout(() => this.nextFootle(), 6000);
+  }
+
+  // ------------------------------------------------------------ Name Them All
+  startNameAll() {
+    this.phase = 'nameall';
+    this.crit = nameAllCriterion();
+    this.nameSubs = {};
+    this.dur = this.settings.nameTime * 1000;
+    this.hub.broadcast({ t: 'nameall', crit: this.crit, dur: this.dur, players: this.roster() });
+    this.timer = setTimeout(() => this.endNameAll(), this.dur + 3000);
+  }
+
+  onNameAllDone(id, m) {
+    if (this.phase !== 'nameall' || this.nameSubs[id]) return;
+    this.nameSubs[id] = Array.isArray(m.pids) ? m.pids.slice(0, 200) : [];
+    this.hub.broadcast({ t: 'progress', answered: Object.keys(this.nameSubs) });
+    this.checkAllIn();
+  }
+
+  endNameAll() {
+    if (this.phase !== 'nameall') return;
+    this.phase = 'nameall-end';
+    const multi = this.humans.length > 1;
+    const subs = {};
+    for (const p of this.humans) {
+      const valid = [...new Set(this.nameSubs[p.id] || [])].filter((pid) => P(pid) && fits(P(pid), this.crit));
+      let pts = 0;
+      const unique = [];
+      for (const pid of valid) {
+        pts += 100;
+        if (multi && !this.humans.some((o) => o.id !== p.id && (this.nameSubs[o.id] || []).includes(pid))) { pts += 50; unique.push(pid); }
+      }
+      p.score += pts;
+      subs[p.id] = { valid, unique, pts };
+    }
+    this.finish({ nameall: { crit: this.crit, subs } });
   }
 }
 
