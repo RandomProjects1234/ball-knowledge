@@ -348,7 +348,7 @@ const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 function parse(block, icon) {
-  return block.trim().split('\n').map((line) => {
+  return block.trim().split(/\r?\n/).map((line) => {
     const [name, wiki, nation, pos, rating, born, clubs] = line.split('|');
     const career = clubs.split('>');
     return {
