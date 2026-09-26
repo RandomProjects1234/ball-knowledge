@@ -1,9 +1,9 @@
 // Host-side controller. Owns the truth (players, scores, timers) and tells
 // every client what to show. In solo mode it simply has one player.
 import { MODES, makeQuestions, scoreAnswer, DRAFT_SLOTS, draftOptions, aiPick, canAfford,
-  runLeague, AI_TEAMS, makeGrid, fits, gridPoints, setIcons, footlePick, nameAllCriterion } from './modes.js';
-import { P } from './data.js';
-import { shuffle } from './util.js';
+  runLeague, AI_TEAMS, makeGrid, fits, gridPoints, setIcons, footlePick, nameAllCriterion } from './modes.js?v=mui1d0pu';
+import { P } from './data.js?v=mui1d0pu';
+import { shuffle } from './util.js?v=mui1d0pu';
 
 const QUIZ_TIME = { whoami: 1.4, hl: 0.8, tf: 0.7, flags: 0.7, scramble: 1.15, oddone: 1.2, squad: 1.1, gap: 1.1 };
 

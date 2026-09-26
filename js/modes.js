@@ -1,9 +1,9 @@
 // Pure game logic: question generators, the $20 draft and the grid. Runs on the
 // host only; results are sent to everyone as plain JSON.
-import { PLAYERS, ACTIVE_PLAYERS, P, POS_NAME, NATIONS } from './data.js';
-import { PHOTOS } from './photos.js';
-import { TRIVIA } from './trivia.js';
-import { pick, shuffle, sample, rand, poisson, weighted, clamp } from './util.js';
+import { PLAYERS, ACTIVE_PLAYERS, P, POS_NAME, NATIONS } from './data.js?v=mui1d0pu';
+import { PHOTOS } from './photos.js?v=mui1d0pu';
+import { TRIVIA } from './trivia.js?v=mui1d0pu';
+import { pick, shuffle, sample, rand, poisson, weighted, clamp } from './util.js?v=mui1d0pu';
 
 export const CATEGORIES = [
   ['featured', '⭐ Big games'],

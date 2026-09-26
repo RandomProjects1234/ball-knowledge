@@ -1,9 +1,9 @@
-import { Hub } from './net.js';
-import { Host } from './game.js';
-import { MODES, CATEGORIES, DRAFT_SLOTS, canAfford, teamStats, fits, answersFor, gridPoints, setIcons, pool, footleHints } from './modes.js';
-import { PLAYERS, P, NATIONS, shortName } from './data.js';
-import { cardHTML, photoOf, flagImg, flagUrl } from './card.js';
-import { esc, norm, sfx, toggleMute, isMuted, shuffle } from './util.js';
+import { Hub } from './net.js?v=mui1d0pu';
+import { Host } from './game.js?v=mui1d0pu';
+import { MODES, CATEGORIES, DRAFT_SLOTS, canAfford, teamStats, fits, answersFor, gridPoints, setIcons, pool, footleHints } from './modes.js?v=mui1d0pu';
+import { PLAYERS, P, NATIONS, shortName } from './data.js?v=mui1d0pu';
+import { cardHTML, photoOf, flagImg, flagUrl } from './card.js?v=mui1d0pu';
+import { esc, norm, sfx, toggleMute, isMuted, shuffle } from './util.js?v=mui1d0pu';
 
 const app = document.getElementById('app');
 const S = {
